@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Byte the Forager</title>
+<style>
+:root{--bg:#e9f1ec;--card:#fff;--tx:#14231c;--mut:#4f6157;--bd:#c6d6cc;--safe:#0072b2;--poi:#d55e00;--sb:#d6e9f7;--pb:#fbe3d2;--ac:#3b5bdb;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1a14;--card:#16261d;--tx:#e6f2ea;--mut:#9fb5a8;--bd:#2b4236;--safe:#56b4e9;--poi:#ff9e57;--sb:#1b3a50;--pb:#4a2c18;--ac:#8aa4ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1a14;--card:#16261d;--tx:#e6f2ea;--mut:#9fb5a8;--bd:#2b4236;--safe:#56b4e9;--poi:#ff9e57;--sb:#1b3a50;--pb:#4a2c18;--ac:#8aa4ff;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.5 "Trebuchet MS","Segoe UI",system-ui,sans-serif;padding:14px}
+main{max-width:900px;margin:0 auto}
+h1{font-size:1.8rem;margin:0}h2{font-size:1.1rem;margin:0 0 4px}
+.sub{color:var(--mut);margin:2px 0 12px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+canvas{width:100%;display:block;border:2px solid var(--bd);border-radius:8px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--ac)}
+button{font:inherit;font-weight:700;padding:9px 14px;border-radius:8px;border:2px solid var(--tx);background:var(--tx);color:var(--bg);cursor:pointer}
+button.alt{background:transparent;color:var(--tx)}button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.hp{height:14px;border-radius:7px;background:var(--bd);overflow:hidden}.hp i{display:block;height:100%;background:var(--safe);width:100%;transition:width .15s}
+.lg{color:var(--mut);font-size:.9rem}.s{color:var(--safe)}.p{color:var(--poi)}
+#msg{min-height:3.2em}details p,details li{color:var(--mut)}summary{cursor:pointer;font-weight:700}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}.ov[hidden]{display:none}.ov .card{max-width:520px;margin:0}
+#pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}#pills span{padding:3px 10px;border-radius:99px;border:2px solid var(--bd);color:var(--mut);font-weight:700;font-size:.9rem}#pills span.on{background:var(--ac);border-color:var(--ac);color:var(--bg)}
+#go{font-size:1.1rem;padding:11px 20px}
+</style></head><body><main>
+<button id="help" class="alt" style="float:right">? Help</button><h1>Byte the Forager</h1>
+<p class="sub">Byte is a hungry robot that can’t read labels. Teach it to tell safe fruit from poison.</p>
+<details class="card"><summary>Rules and words to know</summary>
+<ol><li>Each fruit has two <b>features</b>: sweetness (across) and size (up). Safe fruit is a <b class="s">circle</b>, poison is a <b class="p">square</b>.</li>
+<li>Byte learns from <b>training</b> fruits (the labelled dots). The shaded map shows what Byte would do anywhere: blue means eat, orange means skip.</li>
+<li>Then send Byte into the forest with 25 <b>new</b> fruits it has never seen (the <b>test</b> set). You get 3 trips per level.</li>
+<li>Eating safe fruit gives +5 HP, eating poison costs 15 HP, skipping safe fruit costs 3 HP (hunger). Byte starts each trip at 100 HP.</li>
+<li>Pass a level by reaching the target accuracy while staying alive. Each level gives Byte a smarter way to learn.</li></ol>
+<p><b>Accuracy</b> = share of fruits judged correctly. <b>Overfitting</b> = memorizing quirks and mistakes in the training data, so new data goes badly. <b>Underfitting</b> = a rule too simple to catch the real pattern.</p></details>
+<div class="card" id="coach"><div id="pills"><span>1 Teach Byte</span><span>2 Send Byte out</span><span>3 Check result</span></div><p id="ctext" style="margin:0"></p></div>
+<div class="grid">
+<div class="card"><canvas id="c" aria-label="Fruit map: sweetness across, size up"></canvas>
+<p class="lg"><span class="s">● safe</span> &nbsp; <span class="p">■ poison</span> &nbsp; shading = Byte’s decision &nbsp; ✓ ✗ = forest results</p></div>
+<div>
+<div class="card"><h2 id="lt"></h2><p id="note" class="lg" style="color:var(--tx)"></p></div>
+<div class="card">
+<div class="row" id="r1"><label for="s1">Fruits Byte studies: <b id="v1"></b></label><input id="s1" type="range" min="4" max="40" value="8"></div>
+<div class="row" id="r2"><label for="s2">Voters (k): <b id="v2"></b></label><input id="s2" type="range" min="1" max="25" value="1"></div>
+<div id="r3"><div class="row"><label for="s3">Learning rate: <b id="v3"></b></label><input id="s3" type="range" min="1" max="30" value="5"></div>
+<div class="row"><button id="b1" class="alt">Train 1 round</button><button id="b10" class="alt">Train 10 rounds</button><button id="bz" class="alt">Reset brain</button><span class="lg" id="rd"></span></div></div>
+<p>Training accuracy: <b id="ta"></b> &nbsp; Target in forest: <b id="tg"></b></p>
+<div class="hp" aria-label="Byte health"><i id="hp"></i></div>
+<div class="row"><button id="go">Send Byte out</button><button id="nx" class="alt" hidden></button><button id="sk" class="alt" hidden>Fast-forward</button><span class="lg" id="tl"></span></div>
+<p id="msg"></p></div></div></div>
+<div id="intro" class="ov"><div class="card"><h2>Welcome! Meet Byte the robot</h2><ol><li><b>Teach Byte.</b> Byte learns from the dots on the map. Use the sliders or buttons under the map to change how it learns.</li><li><b>Send Byte out.</b> Press the big button. Byte walks through 25 new fruits and decides to eat or skip each one.</li><li><b>Check the result.</b> Reach the target accuracy without losing all 100 HP to pass the level.</li></ol><p>Circle = safe fruit. Square = poison. Blue shading = Byte would eat there. Orange shading = Byte would skip.</p><button id="play">Start playing</button></div></div>
+<script>
+const $=id=>document.getElementById(id),css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const gauss=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*Math.random())},cl=v=>Math.max(0,Math.min(1,v));
+const LV=[
+{t:"Level 1: Learn from examples",sd:.1,flip:.03,goal:.8,note:"Byte learns from labelled examples. Its rule is called nearest neighbour: for a new fruit, find the closest fruit it has studied and copy that label. Try studying only a few fruits, then many. More examples give a better map."},
+{t:"Level 2: Messy data",sd:.17,flip:.12,goal:.85,note:"Real data has mistakes: some training labels here are wrong. Now Byte lets the k closest fruits vote (k-nearest neighbours). With k = 1 it trusts every example, even the wrong ones. That is overfitting. A huge k ignores detail and underfits. Find the balance."},
+{t:"Level 3: Byte teaches itself",sd:.12,flip:.05,goal:.9,note:"Byte’s brain is now a straight line (logistic regression). It starts with a random line. Each round it checks every training fruit and nudges the line to fix mistakes. This is gradient descent. The learning rate is the size of each nudge: too small is slow, too big is jumpy."}];
+let L=0,tr=[],pool=[],n=8,k=1,w=[0,0,0],lr=5,rounds=0,trips=3,hp=100,marks=[],busy=false,passed=false,stars=0;
+function mk(sd,flip,N){return Array.from({length:N},()=>{const t=Math.random()<.5?1:0,c=t?[.7,.65]:[.3,.35],p={x:cl(c[0]+sd*gauss()),y:cl(c[1]+sd*gauss()),t};p.l=Math.random()<flip?1-t:t;return p})}
+function tset(){return L==0?tr.slice(0,n):tr}
+function pr(x,y){if(L<2){const P=tset().map(p=>({d:(p.x-x)**2+(p.y-y)**2,l:p.l})).sort((a,b)=>a.d-b.d).slice(0,k),s=P.reduce((a,p)=>a+p.l,0);return s*2>k?1:s*2<k?0:P[0].l}
+return w[0]*(x-.5)+w[1]*(y-.5)+w[2]*.5>0?1:0}
+function round(){for(const p of [...tr].sort(()=>Math.random()-.5)){const a=p.x-.5,b=p.y-.5,q=1/(1+Math.exp(-(w[0]*a+w[1]*b+w[2]*.5))),e=p.l-q;w[0]+=lr*e*a;w[1]+=lr*e*b;w[2]+=lr*e*.5}rounds++}
+const tacc=()=>tset().filter(p=>pr(p.x,p.y)==p.l).length/tset().length;
+function start(){const c=LV[L];tr=mk(c.sd,c.flip,L==1?60:40);pool=mk(c.sd,0,300);n=8;k=1;lr=5;rounds=0;w=[Math.random()-.5,Math.random()-.5,0];trips=3;hp=100;marks=[];busy=false;passed=false;
+$("s1").value=8;$("s2").value=1;$("s3").value=5;$("nx").hidden=true;$("go").disabled=false;$("lt").textContent=c.t;$("note").textContent=c.note;$("tg").textContent=Math.round(c.goal*100)+"%";
+$("r1").hidden=L!=0;$("r2").hidden=L!=1;$("r3").hidden=L!=2;$("msg").textContent="";coach(1,HINT[L]);rob.x=.08;rob.y=.9;rob.mood=0;ui()}
+function ui(){$("v1").textContent=n;$("v2").textContent=k;$("v3").textContent=lr;$("rd").textContent="Rounds trained: "+rounds;$("ta").textContent=Math.round(tacc()*100)+"%";$("tl").textContent="Trips left: "+trips;$("hp").style.width=hp+"%";draw()}
+const bg=document.createElement("canvas"),HINT=["Drag the slider to choose how many fruits Byte studies. The blue and orange map shows what Byte would do. Then press Send Byte out.","Move the Voters slider and watch the map change. When you are ready, press Send Byte out.","Press Train 1 round a few times and watch the dividing line move. When you are ready, press Send Byte out."];
+let dirty=true,W=0,T=null,spd=1,pop=[],last=0;const rob={x:.08,y:.9,mouth:0,mood:0,face:1},MV=330,ACT=340;
+function coach(n,t){document.querySelectorAll("#pills span").forEach((e,i)=>e.className=i+1==n?"on":"");$("ctext").textContent=t}
+function draw(){dirty=true}
+function shapeAt(g,p,z,fill,col){const X=p.x*W,Y=(1-p.y)*W;g.beginPath();p.sh?g.rect(X-z,Y-z,2*z,2*z):g.arc(X,Y,z,0,7);if(fill){g.fillStyle=col;g.fill()}else{g.strokeStyle=col;g.lineWidth=2;g.stroke()}}
+function buildBG(){const cv=$("c"),r=devicePixelRatio||1;W=cv.clientWidth;cv.width=cv.height=bg.width=bg.height=W*r;cv.style.height=W+"px";const g=bg.getContext("2d");g.setTransform(r,0,0,r,0,0);
+const G=30,s=W/G,S=css("--safe"),P=css("--poi"),SB=css("--sb"),PB=css("--pb");for(let i=0;i<G;i++)for(let j=0;j<G;j++){g.fillStyle=pr((i+.5)/G,1-(j+.5)/G)?PB:SB;g.fillRect(Math.floor(i*s),Math.floor(j*s),Math.ceil(s)+1,Math.ceil(s)+1)}
+for(const p of tset()){const q={...p,sh:p.l};shapeAt(g,q,8,1,"#fff");shapeAt(g,q,6,1,p.l?P:S);shapeAt(g,q,6,0,"#10202c")}dirty=false}
+function robot(g,ts){const u=W*.042,X=rob.x*W,Y=(1-rob.y)*W+(T?0:Math.sin(ts/280)*3),c=rob.mood?css("--poi"):css("--tx");g.save();g.translate(X,Y);g.scale(rob.face,1);
+g.fillStyle="rgba(0,0,0,.18)";g.beginPath();g.ellipse(0,u*1.55,u*1.1,u*.25,0,0,7);g.fill();
+g.fillStyle=c;g.beginPath();g.roundRect(-u*.8,u*.1,u*1.6,u*1.35,u*.3);g.fill();g.fillRect(-u*1.2,u*.35,u*.4,u*.8);g.fillRect(u*.8,u*.35,u*.4,u*.8);
+g.beginPath();g.roundRect(-u,-u*1.5,u*2,u*1.5,u*.4);g.fill();
+g.strokeStyle=c;g.lineWidth=2;g.beginPath();g.moveTo(0,-u*1.5);g.lineTo(0,-u*1.9);g.stroke();g.beginPath();g.arc(0,-u*1.95,u*.15,0,7);g.fillStyle=css("--poi");g.fill();
+g.fillStyle=css("--card");g.beginPath();g.roundRect(-u*.8,-u*1.35,u*1.6,u*1.15,u*.3);g.fill();
+g.strokeStyle=css("--tx");g.fillStyle=css("--tx");g.lineWidth=2;
+for(const ex of[-.4,.4]){g.beginPath();if(rob.mood){g.moveTo(u*ex-4,-u*1.05-4);g.lineTo(u*ex+4,-u*1.05+4);g.moveTo(u*ex+4,-u*1.05-4);g.lineTo(u*ex-4,-u*1.05+4);g.stroke()}else{g.arc(u*ex,-u*1.05,3.5,0,7);g.fill()}}
+g.beginPath();g.ellipse(0,-u*.5,u*.35,u*(.05+.3*rob.mouth),0,0,7);g.fill();g.restore()}
+function scene(g,ts){const S=css("--safe"),P=css("--poi");
+for(const m of marks){const c=m.ok?S:P;shapeAt(g,{...m,sh:m.t},7,0,c);g.fillStyle=c;g.font="bold 14px sans-serif";g.fillText(m.ok?"✓":"✗",m.x*W+8,(1-m.y)*W-8)}
+if(T&&T.i<25){const f=T.S[T.i],k=T.ph?Math.min(1,T.p/ACT):0,z=T.ph&&T.eat?9*(1-k):9;if(z>.5){const q={...f,sh:f.t};shapeAt(g,q,z+3,1,"#fff");shapeAt(g,q,z,1,f.t?P:S);shapeAt(g,q,z,0,"#10202c")}}
+for(const p of pop){g.globalAlpha=Math.max(0,1-p.a/900);g.fillStyle=p.c;g.font="bold 15px sans-serif";g.fillText(p.t,Math.min(p.x*W-14,W-130),(1-p.y)*W-30-p.a*.03)}g.globalAlpha=1;robot(g,ts)}
+function decide(f){const a=pr(f.x,f.y),ok=a==f.t;T.eat=a==0;if(ok)T.c++;hp=Math.max(0,Math.min(100,hp+[[5,-15],[-3,0]][a][f.t]));marks.push({x:f.x,y:f.y,t:f.t,ok});rob.mood=(a==0&&f.t==1)?1:0;
+pop.push({x:f.x,y:f.y,t:a==0?(f.t?"Poison! -15":"Yum! +5"):(f.t?"Skipped poison":"Skipped, -3"),c:ok?css("--safe"):css("--poi"),a:0});$("hp").style.width=hp+"%";$("tl").textContent="Fruit "+(T.i+1)+" of 25"}
+function step(ts){const dt=Math.min(50,ts-last)*spd;last=ts;for(const p of pop)p.a+=dt;pop=pop.filter(p=>p.a<900);if(!T)return;T.p+=dt;const f=T.S[T.i];
+if(T.ph==0){const k=Math.min(1,T.p/MV),e=k*k*(3-2*k);rob.x=T.fx+(f.x-T.fx)*e;rob.y=T.fy+(f.y-T.fy)*e;rob.face=f.x>=T.fx?1:-1;rob.mouth=0;if(k>=1){T.ph=1;T.p=0;decide(f)}}
+else{const k=Math.min(1,T.p/ACT);rob.mouth=T.eat?Math.abs(Math.sin(k*9)):0;if(k>=1){T.i++;T.fx=f.x;T.fy=f.y;T.ph=0;T.p=0;rob.mood=0;if(T.i>=25||hp<=0)finish()}}}
+function frame(ts){requestAnimationFrame(frame);const cv=$("c");if(cv.clientWidth!=W)dirty=true;if(dirty)buildBG();const g=cv.getContext("2d"),r=devicePixelRatio||1;g.setTransform(1,0,0,1,0,0);g.drawImage(bg,0,0);g.setTransform(r,0,0,r,0,0);step(ts);scene(g,ts)}
+function trip(){if(busy||trips<1||passed)return;busy=true;trips--;hp=100;marks=[];pop=[];$("hp").style.width="100%";T={S:[...pool].sort(()=>Math.random()-.5).slice(0,25),i:0,ph:0,p:0,fx:rob.x,fy:rob.y,c:0,eat:false};$("go").disabled=true;$("sk").hidden=false;$("msg").textContent="";coach(2,"Byte is in the forest! It eats fruit it thinks is safe (+5 HP) and skips the rest. Eating poison costs 15 HP.")}
+function finish(){const c=T.c,seen=T.i;T=null;$("sk").hidden=true;spd=1;$("sk").textContent="Fast-forward";rob.mouth=0;end(c,seen)}
+function end(c,seen){busy=false;const acc=c/seen,goal=LV[L].goal,ta=tacc(),ok=acc>=goal&&hp>0&&seen==25;
+let m="Forest accuracy "+Math.round(acc*100)+"% (training "+Math.round(ta*100)+"%), HP "+hp+". ";
+if(hp<=0)m+="Byte ate too much poison and fainted. ";else if(ta-acc>.12)m+="Big gap between training and forest: that is overfitting. ";
+if(ok){passed=true;stars+=trips+1;m+="Level passed! "+"★".repeat(trips+1)+(L==0?" Byte learned more from more examples.":L==1?" Byte’s voters smoothed out the wrong labels.":" Byte’s line settled where mistakes were fewest.");$("nx").hidden=false;$("nx").textContent=L<2?"Next level":"See summary";coach(3,"You passed! Press the next button to continue.")}
+else if(trips<1){m+="No trips left. Retry with fresh fruit.";$("nx").hidden=false;$("nx").textContent="Retry level";coach(3,"Out of trips. Press Retry level to try again with new fruit.")}
+else{m+="Change Byte’s brain and try again.";$("go").disabled=false;coach(3,"Not there yet. Compare the two accuracy numbers, change Byte's brain, then press Send Byte out again.")}
+$("msg").textContent=m;ui()}
+$("sk").onclick=()=>{spd=spd==1?3:1;$("sk").textContent=spd==1?"Fast-forward":"Normal speed"};
+$("play").onclick=()=>$("intro").hidden=true;$("help").onclick=()=>$("intro").hidden=false;
+$("s1").oninput=e=>{n=+e.target.value;ui()};$("s2").oninput=e=>{k=+e.target.value;ui()};$("s3").oninput=e=>{lr=+e.target.value;ui()};
+$("b1").onclick=()=>{round();ui()};$("b10").onclick=()=>{for(let i=0;i<10;i++)round();ui()};$("bz").onclick=()=>{w=[Math.random()-.5,Math.random()-.5,0];rounds=0;ui()};
+$("go").onclick=trip;
+$("nx").onclick=()=>{if(!passed){start();return}if(L<2){L++;start()}else{$("lt").textContent="Summary: "+stars+" stars";$("note").textContent="You taught Byte three ways. Nearest neighbour learned by copying examples, and more examples helped. k-nearest neighbours added voting, which resists wrong labels. Logistic regression learned a line by repeatedly fixing its mistakes. Through all three, the forest test showed what training accuracy alone could not.";$("nx").textContent="Play again";passed=false;$("nx").onclick=()=>{L=0;stars=0;$("nx").onclick=nxt;start()}}};
+const nxt=$("nx").onclick;addEventListener("resize",draw);start();requestAnimationFrame(frame);
+</script></main></body></html>
